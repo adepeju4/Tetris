@@ -10,8 +10,17 @@ play_width = 300
 play_height = 600
 block_size = 30
 
+button_width = 100
+button_height = 50
+button_margin = 2
+
 top_left_x = (s_width - play_width) // 2
 top_left_y = s_height - play_height - 50
+
+pygame.mixer.init()
+move_sound = pygame.mixer.Sound("assets/move.mp3")
+
+move_sound.set_volume(0.5)
 
 # SHAPE FORMATS
 S = [
@@ -74,19 +83,107 @@ class Piece(object):
         self.rotation = 0
 
 
+class Button:
+    def __init__(self, color, x, y, width, height, text=""):
+        self.color = color
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+        self.text = text
+
+    def draw(self, win, outline=None):
+        if outline:
+            pygame.draw.rect(
+                win,
+                outline,
+                (self.x - 2, self.y - 2, self.width + 4, self.height + 4),
+                0,
+            )
+        pygame.draw.rect(win, self.color, (self.x, self.y, self.width, self.height), 0)
+        if self.text != "":
+            font = pygame.font.SysFont(None, 50)
+            text = font.render(self.text, 1, (0, 0, 0))
+            win.blit(
+                text,
+                (
+                    self.x + (self.width / 2 - text.get_width() / 2),
+                    self.y + (self.height / 2 - text.get_height() / 2),
+                ),
+            )
+
+    def isOver(self, pos):
+        if self.x < pos[0] < self.x + self.width:
+            if self.y < pos[1] < self.y + self.height:
+                return True
+        return False
+
+
 def main_menu(win):
     run = True
+    colors = [
+        (255, 0, 0),
+        (0, 255, 0),
+        (0, 0, 255),
+        (255, 255, 0),
+        (0, 255, 255),
+        (255, 0, 255),
+    ]  # Define a list of colors
     while run:
         win.fill((0, 0, 0))
-        draw_text_middle(win, "Press any key to begin.", 60, (255, 255, 255))
+        font = pygame.font.SysFont("comicsans", 60)
+        letters = ["T", "E", "T", "R", "I", "S"]
+        colors = [
+            (255, 0, 0),
+            (0, 255, 0),
+            (0, 0, 255),
+            (255, 255, 0),
+            (0, 255, 255),
+            (255, 0, 255),
+        ]  # Define a list of colors
+        x_offset = 0
+        spacing = 10  # Define a spacing between letters
+        for i, letter in enumerate(letters):
+            label = font.render(letter, 1, colors[i])
+            win.blit(
+                label,
+                (
+                    top_left_x
+                    + play_width / 2
+                    - (
+                        label.get_width() * len(letters) / 2
+                        + spacing * (len(letters) - 1) / 2
+                    )
+                    + x_offset,
+                    top_left_y + play_height / 2 - 100,
+                ),
+            )
+            x_offset += label.get_width() + spacing  # Add spacing to x_offset
+        draw_text_middle(
+            win, "Press any key to begin", 60, (255, 255, 255), offset_y=30
+        )
         pygame.display.update()
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 run = False
             if event.type == pygame.KEYDOWN:
-                main(win)
+                run = False
 
-    pygame.display.quit()
+
+def load_image_with_transparency(image_path, transparency):
+    # Load the original image
+    image = pygame.image.load(image_path)
+
+    # Create a new Surface with the same size as the image
+    overlay = pygame.Surface(image.get_size(), pygame.SRCALPHA)
+
+    # Fill the new Surface with the semi-transparent black color
+    overlay.fill((0, 0, 0, transparency))
+
+    # Blit the overlay onto the image
+    image.blit(overlay, (0, 0))
+
+    return image
 
 
 def text_objects(text, font):
@@ -148,7 +245,7 @@ def get_shape():
     return Piece(5, 0, random.choice(shapes))
 
 
-def draw_text_middle(text, size, color, surface):
+def draw_text_middle(surface, text, size, color, offset_y=0):
     font = pygame.font.SysFont("comicsans", size, bold=True)
     label = font.render(text, 1, color)
 
@@ -156,7 +253,7 @@ def draw_text_middle(text, size, color, surface):
         label,
         (
             top_left_x + play_width / 2 - (label.get_width() / 2),
-            top_left_y + play_height / 2 - label.get_height() / 2,
+            top_left_y + play_height / 2 - (label.get_height() / 2) + offset_y,
         ),
     )
 
@@ -165,17 +262,20 @@ def draw_grid(surface, grid):
     sx = top_left_x
     sy = top_left_y
 
-    for i in range(len(grid)):
+    for i in range(1, len(grid)):  # Start from 1 to avoid drawing on the top border
         pygame.draw.line(
-            surface, (128, 128, 128), (sx, sy + i * 30), (sx + play_width, sy + i * 30)
+            surface,
+            (128, 128, 128),
+            (sx, sy + i * block_size),
+            (sx + play_width, sy + i * block_size),
         )
-        for j in range(len(grid[i])):
-            pygame.draw.line(
-                surface,
-                (128, 128, 128),
-                (sx + j * 30, sy),
-                (sx + j * 30, sy + play_height),
-            )
+    for j in range(1, len(grid[0])):  # Start from 1 to avoid drawing on the left border
+        pygame.draw.line(
+            surface,
+            (128, 128, 128),
+            (sx + j * block_size, sy),
+            (sx + j * block_size, sy + play_height),
+        )
 
 
 def clear_rows(grid, locked):
@@ -220,19 +320,25 @@ def draw_next_shape(shape, surface):
     surface.blit(label, (sx + 10, sy - 30))
 
 
-def draw_window(surface, grid, score=0):
-    surface.fill((0, 0, 0))
+def draw_window(
+    surface,
+    grid,
+    quitButton,
+    score=0,
+):
 
     pygame.font.init()
     font = pygame.font.SysFont("comicsans", 60)
     label = font.render("Tetris", 1, (255, 255, 255))
-    
-    surface.blit(label, (top_left_x + play_width / 2 - (label.get_width() / 2), 30))
+
+    surface.blit(label, (top_left_x + play_width / 2 - (label.get_width() / 2), 10))
 
     font = pygame.font.SysFont("comicsans", 30)
     label = font.render("Score: " + str(score), 1, (255, 255, 255))
     # Position the score label to the right of the game board.
     surface.blit(label, (top_left_x + play_width + 50, top_left_y))
+
+    quitButton.draw(surface, (0, 0, 0))
 
     for i in range(len(grid)):
         for j in range(len(grid[i])):
@@ -244,7 +350,7 @@ def draw_window(surface, grid, score=0):
             )
 
     pygame.draw.rect(
-        surface, (255, 0, 0), (top_left_x, top_left_y, play_width, play_height), 5
+        surface, "#183130", (top_left_x, top_left_y, play_width, play_height), 5
     )
 
     draw_grid(surface, grid)
@@ -267,21 +373,70 @@ def draw_button(surface, text, x, y, w, h, ic, ac, action=None):
     surface.blit(text_surf, text_rect)
 
 
+def game_over_screen(win, score):
+    game_over = True
+    while game_over:
+        win.fill((0, 0, 0))  # Fill the window with black
+        font = pygame.font.SysFont("comicsans", 60)
+        label = font.render(
+            "Game Over! Your score is " + str(score), 1, (255, 255, 255)
+        )
+        win.blit(
+            label,
+            (
+                top_left_x + play_width / 2 - (label.get_width() / 2),
+                top_left_y + play_height / 2,
+            ),
+        )
+
+        label = font.render("Press any key to start again", 1, (255, 255, 255))
+        win.blit(
+            label,
+            (
+                top_left_x + play_width / 2 - (label.get_width() / 2),
+                top_left_y + play_height / 2 + 60,
+            ),
+        )
+
+        pygame.display.update()
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+            if event.type == pygame.KEYDOWN:
+                game_over = False
+
+    # Reset the game
+    main(win)
+
+
 def main(win):
+
     locked_positions = {}
     grid = create_grid(locked_positions)
-
+    game_over = False
     change_piece = False
     run = True
     current_piece = get_shape()
     next_piece = get_shape()
     clock = pygame.time.Clock()
+
     fall_time = 0
     fall_speed = 0.27
     level_time = 0
     score = 0
 
+    background = load_image_with_transparency("./assets/background.jpeg", 128)
+    background = pygame.transform.scale(background, (s_width, s_height))
+
+    quitButton = Button(
+        (255, 0, 0), button_margin, button_margin, button_width, button_height, "Quit"
+    )
+
+    main_menu(win)
+
     while run:
+        win.blit(background, (0, 0))
         grid = create_grid(locked_positions)
         fall_time += clock.get_rawtime()
         level_time += clock.get_rawtime()
@@ -300,12 +455,23 @@ def main(win):
                 change_piece = True
 
         for event in pygame.event.get():
+            pos = pygame.mouse.get_pos()
+
             if event.type == pygame.QUIT:
                 run = False
-                pygame.display.quit()
-                quit()
+                pygame.quit()
+
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if quitButton.isOver(pos):
+                    run = False
+
+            if game_over and event.type == pygame.KEYDOWN:
+                score = 0
+                grid = create_grid()
+                game_over = False
 
             if event.type == pygame.KEYDOWN:
+                move_sound.play()
                 if event.key == pygame.K_LEFT:
                     current_piece.x -= 1
                     if not valid_space(grid, current_piece):
@@ -339,22 +505,25 @@ def main(win):
             change_piece = False
             score += clear_rows(grid, locked_positions) * 10
 
-        draw_window(win, grid, score)
+        draw_window(
+            win,
+            grid,
+            quitButton,
+            score,
+        )
         draw_next_shape(next_piece, win)
-        pygame.display.update()
-
+        pygame.display.flip()
 
         if check_lost(locked_positions):
-            draw_text_middle(win, "YOU LOST!", 80, (255, 255, 255))
-            pygame.display.update()
-            pygame.time.delay(2000)
-            run = False
+            game_over = True
 
+        if game_over:
+            game_over_screen(win, score)
+            continue
 
-    draw_text_middle(win, "Press any key to play again", 60, (255, 255, 255))
-    pygame.display.update()
+    draw_text_middle(win, "Press any key to return to main menu", 30, (255, 255, 255))
+
     pygame.time.delay(2000)
-    main_menu(win)
 
 
 pygame.init()

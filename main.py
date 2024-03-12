@@ -389,7 +389,7 @@ def game_over_screen(win, score):
             ),
         )
 
-        label = font.render("Press any key to start again", 1, (255, 255, 255))
+        label = font.render("Press any key to return to main menu", 1, (255, 255, 255))
         win.blit(
             label,
             (

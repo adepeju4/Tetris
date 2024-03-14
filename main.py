@@ -378,7 +378,7 @@ def game_over_screen(win, score):
     game_over = True
     while game_over:
         win.fill((0, 0, 0))  # Fill the window with black
-        font = pygame.font.SysFont("comicsans", 60)
+        font = pygame.font.SysFont("comicsans", 30)
         label = font.render(
             "Game Over! Your score is " + str(score), 1, (255, 255, 255)
         )

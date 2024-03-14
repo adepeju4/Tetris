@@ -21,6 +21,7 @@ pygame.mixer.init()
 move_sound = pygame.mixer.Sound("assets/move.mp3")
 
 move_sound.set_volume(0.5)
+pygame.display.set_caption("Tetris")
 
 # SHAPE FORMATS
 S = [
